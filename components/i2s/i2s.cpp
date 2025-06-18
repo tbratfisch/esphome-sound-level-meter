@@ -5,11 +5,13 @@ namespace i2s {
 
 static const char *const TAG = "i2s";
 
+void I2SComponent::set_adc_pin(InternalGPIOPin *adc_pin) { this->adc_pin_ = adc_pin; }
 void I2SComponent::set_ws_pin(InternalGPIOPin *ws_pin) { this->ws_pin_ = ws_pin; }
 void I2SComponent::set_bck_pin(InternalGPIOPin *bck_pin) { this->bck_pin_ = bck_pin; }
 void I2SComponent::set_din_pin(InternalGPIOPin *din_pin) { this->din_pin_ = din_pin; }
 void I2SComponent::set_dout_pin(InternalGPIOPin *dout_pin) { this->dout_pin_ = dout_pin; }
 void I2SComponent::set_sample_rate(uint32_t sample_rate) { this->sample_rate_ = sample_rate; }
+void I2SComponent::set_adc_atten(adc_atten_t atten) { this->adc_atten_ = atten; }
 uint32_t I2SComponent::get_sample_rate() const { return this->sample_rate_; }
 void I2SComponent::set_bits_per_sample(uint8_t bits_per_sample) { this->bits_per_sample_ = bits_per_sample; }
 uint8_t I2SComponent::get_bits_per_sample() const { return this->bits_per_sample_; }
@@ -30,6 +32,7 @@ void I2SComponent::dump_config() {
   LOG_PIN("  BCK Pin: ", this->bck_pin_);
   LOG_PIN("  DIN Pin: ", this->din_pin_);
   LOG_PIN("  DOUT Pin: ", this->dout_pin_);
+  LOG_PIN("  ADC Pin: ", this->adc_pin_);
   ESP_LOGCONFIG(TAG, "  Sample Rate: %u", this->sample_rate_);
   ESP_LOGCONFIG(TAG, "  Bits Per Sample: %u", this->bits_per_sample_);
   ESP_LOGCONFIG(TAG, "  DMA Buf Count: %u", this->dma_buf_count_);
@@ -143,7 +146,7 @@ void I2SComponent::setup() {
                              .use_apll = this->use_apll_,
                              .tx_desc_auto_clear = false,
                              .fixed_mclk = 0,
-                             .mclk_multiple = I2S_MCLK_MULTIPLE_DEFAULT,
+                             .mclk_multiple = I2S_MCLK_MULTIPLE_256,
                              .bits_per_chan = i2s_bits_per_chan_t(0)};
 
   i2s_pin_config_t i2s_pin_config = {
@@ -153,14 +156,30 @@ void I2SComponent::setup() {
       .data_out_num = this->dout_pin_ != nullptr ? this->dout_pin_->get_pin() : I2S_PIN_NO_CHANGE,
       .data_in_num = this->din_pin_ != nullptr ? this->din_pin_->get_pin() : I2S_PIN_NO_CHANGE};
 
-  esp_err_t err = i2s_driver_install(i2s_port_t(this->port_num_), &i2s_config, 0, NULL);
+  esp_err_t err = ESP_OK;
+  if (this->adc_pin_ != nullptr) {
+    err = adc1_config_width(ADC_WIDTH_BIT_12);
+    if (err != ESP_OK) {
+      ESP_LOGW(TAG, "adc1_config_width failed: %s", esp_err_to_name(err));
+      this->mark_failed();
+      return;
+    }
+    err = adc1_config_channel_atten(static_cast<adc1_channel_t>(this->adc_pin_->get_pin()), this->adc_atten_);
+    if (err != ESP_OK) {
+    ESP_LOGW(TAG, "adc1_config_channel_atten failed: %s", esp_err_to_name(err));
+      this->mark_failed();
+      return;
+    }
+  }
+
+  err = i2s_driver_install(i2s_port_t(this->port_num_), &i2s_config, 0, NULL);
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "i2s_driver_install failed: %s", esp_err_to_name(err));
     this->mark_failed();
     return;
   }
 
-  err = i2s_set_pin(i2s_port_t(this->port_num_), &i2s_pin_config);
+  err = this->adc_pin_ == nullptr ? ESP_OK : i2s_set_pin(i2s_port_t(this->port_num_), &i2s_pin_config);
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "i2s_set_pin failed: %s", esp_err_to_name(err));
     this->mark_failed();

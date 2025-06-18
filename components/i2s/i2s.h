@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <driver/i2s.h>
+#include <driver/adc.h>
 #include "esphome/core/defines.h"
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
@@ -12,10 +13,12 @@ namespace i2s {
 
 class I2SComponent : public Component {
  public:
+  void set_adc_pin(InternalGPIOPin *adc_pin);
   void set_ws_pin(InternalGPIOPin *ws_pin);
   void set_bck_pin(InternalGPIOPin *bck_pin);
   void set_din_pin(InternalGPIOPin *din_pin);
   void set_dout_pin(InternalGPIOPin *dout_pin);
+  void set_adc_atten(adc_atten_t atten);
   void set_sample_rate(uint32_t sample_rate);
   uint32_t get_sample_rate() const;
   void set_bits_per_sample(uint8_t bits_per_sample);
@@ -43,6 +46,7 @@ class I2SComponent : public Component {
   InternalGPIOPin *bck_pin_{nullptr};
   InternalGPIOPin *din_pin_{nullptr};
   InternalGPIOPin *dout_pin_{nullptr};
+  InternalGPIOPin *adc_pin_{nullptr};
 
   uint32_t sample_rate_{48000};
   uint8_t bits_per_sample_{32};
@@ -52,6 +56,7 @@ class I2SComponent : public Component {
   bool use_apll_{false};
   uint8_t bits_shift_{0};
   i2s_channel_fmt_t channel_{I2S_CHANNEL_FMT_ONLY_RIGHT};
+  adc_atten_t adc_atten_{ADC_ATTEN_DB_12};
 };
 }  // namespace i2s
 }  // namespace esphome
